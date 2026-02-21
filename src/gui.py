@@ -51,6 +51,7 @@ def launch_gui():
         root.title("Vehicle Motion Estimation")
         root.geometry("1280x760")
         root.minsize(900, 600)
+        root.configure(bg="#222222")
     else:
         root = ttk.Window(
             title="Vehicle Motion Estimation",
@@ -86,14 +87,14 @@ class MotionApp:
             header,
             text="Vehicle Motion Estimation",
             font=("Segoe UI", 26, "bold"),
-            bootstyle="primary",
+            bootstyle="light",
         ).pack(anchor=W)
 
         ttk.Label(
             header,
             text="Optical flow visualization · Drop a video or click to browse",
             font=("Segoe UI", 11),
-            bootstyle="secondary",
+            bootstyle="light",
         ).pack(anchor=W)
 
         # ----- Drop zone + Browse (shown when no video loaded) -----
@@ -102,7 +103,7 @@ class MotionApp:
 
         self.drop_zone = ttk.Frame(self.drop_frame)
         self.drop_zone.pack(fill=BOTH, expand=True)
-        self.drop_zone.configure(bootstyle="secondary")
+        self.drop_zone.configure(bootstyle="dark")
 
         # Visual drop area (clickable)
         self.drop_inner = ttk.Frame(self.drop_zone, padding=48)
@@ -115,21 +116,21 @@ class MotionApp:
             self.drop_inner,
             text="Drop video here or click to browse",
             font=("Segoe UI", 16),
-            bootstyle="secondary",
+            bootstyle="light",
         ).pack(pady=(0, 8))
         ttk.Label(
             self.drop_inner,
             text="MP4, AVI, MOV, MKV, WebM",
             font=("Segoe UI", 11),
-            bootstyle="inverse-secondary",
+            bootstyle="light",
         ).pack()
 
-        ttk.Separator(self.drop_frame, bootstyle="secondary").pack(fill=X, pady=16)
+        ttk.Separator(self.drop_frame, bootstyle="light").pack(fill=X, pady=16)
 
         browse_btn = ttk.Button(
             self.drop_frame,
             text="Browse for file…",
-            bootstyle="primary-outline",
+            bootstyle="light-outline",
             command=self._open_and_load,
         )
         browse_btn.pack(pady=8)
@@ -145,14 +146,14 @@ class MotionApp:
         ttk.Button(
             bar,
             text="Change video",
-            bootstyle="secondary-link",
+            bootstyle="light-link",
             command=self._change_video,
         ).pack(side=LEFT, padx=(0, 16))
 
         self.play_btn = ttk.Button(
             bar,
             text="Play",
-            bootstyle="primary",
+            bootstyle="success",
             command=self.toggle_play,
         )
         self.play_btn.pack(side=LEFT)
@@ -161,7 +162,7 @@ class MotionApp:
             bar,
             text="Motion: —",
             font=("Segoe UI", 11),
-            bootstyle="info",
+            bootstyle="light",
         )
         self.motion_label.pack(side=LEFT, padx=(24, 0))
 
@@ -183,13 +184,13 @@ class MotionApp:
 
     def _drop_enter(self, event):
         try:
-            self.drop_inner.configure(bootstyle="info")
+            self.drop_inner.configure(bootstyle="primary")
         except TclError:
             pass
 
     def _drop_leave(self, event):
         try:
-            self.drop_inner.configure(bootstyle="secondary")
+            self.drop_inner.configure(bootstyle="dark")
         except TclError:
             pass
 
