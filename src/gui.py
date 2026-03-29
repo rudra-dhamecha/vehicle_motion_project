@@ -17,7 +17,11 @@ try:
 except ImportError:
     _HAS_DND = False
 
-from optical_flow import OpticalFlowProcessor
+from optical_flow import (
+    OpticalFlowProcessor,
+    CarDetector,
+    draw_detections,
+)
 
 
 def _normalize_drop_path(path):
@@ -70,6 +74,7 @@ class MotionApp:
     def __init__(self, root):
         self.root = root
         self.processor = OpticalFlowProcessor()
+        self._detector = None  # Lazy-loaded on first video
         self.cap = None
         self.playing = False
         self._current_path = None
@@ -166,21 +171,28 @@ class MotionApp:
         )
         self.motion_label.pack(side=LEFT, padx=(24, 0))
 
-        # Two panels: input | optical flow
+        # Three panels: input | optical flow | object detection
         panels = ttk.Frame(self.video_frame)
         panels.pack(fill=BOTH, expand=True, pady=8)
 
         left_card = ttk.Labelframe(panels, text="Input", bootstyle="primary", padding=8)
-        left_card.pack(side=LEFT, fill=BOTH, expand=True, padx=(0, 8))
+        left_card.pack(side=LEFT, fill=BOTH, expand=True, padx=(0, 6))
         self.input_label = ttk.Label(left_card)
         self.input_label.pack(fill=BOTH, expand=True)
 
-        right_card = ttk.Labelframe(
+        mid_card = ttk.Labelframe(
             panels, text="Optical flow", bootstyle="info", padding=8
         )
-        right_card.pack(side=LEFT, fill=BOTH, expand=True, padx=(8, 0))
-        self.output_label = ttk.Label(right_card)
+        mid_card.pack(side=LEFT, fill=BOTH, expand=True, padx=6)
+        self.output_label = ttk.Label(mid_card)
         self.output_label.pack(fill=BOTH, expand=True)
+
+        right_card = ttk.Labelframe(
+            panels, text="Object detection", bootstyle="success", padding=8
+        )
+        right_card.pack(side=LEFT, fill=BOTH, expand=True, padx=(6, 0))
+        self.detection_label = ttk.Label(right_card)
+        self.detection_label.pack(fill=BOTH, expand=True)
 
     def _drop_enter(self, event):
         try:
@@ -223,14 +235,18 @@ class MotionApp:
         self._current_path = path
         self.processor.prev_gray = None
         self.playing = False
+        if self._detector is None:
+            self._detector = CarDetector(conf_threshold=0.4)
         self.play_btn.config(text="Play")
 
         # Show first frame
         ret, frame = self.cap.read()
         if ret:
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            processed = self.processor.process_frame(frame)
-            self._show_frames(frame, processed)
+            processed, mag, ang = self.processor.process_frame(frame)
+            detections = self._detector.detect(frame)
+            detection_frame = draw_detections(frame, detections, mag, ang)
+            self._show_frames(frame, processed, detection_frame)
             self.motion_label.config(text="Motion: —")
 
         # Switch to video view
@@ -242,8 +258,8 @@ class MotionApp:
         if path:
             self._load_video(path)
 
-    def _show_frames(self, frame_bgr, processed_bgr, max_display_size=(640, 360)):
-        """Scale frames to fit display and show in both panels."""
+    def _show_frames(self, frame_bgr, processed_bgr, detection_bgr, max_display_size=(420, 280)):
+        """Scale frames to fit display and show in all three panels."""
         h, w = frame_bgr.shape[:2]
         mw, mh = max_display_size
         scale = min(mw / w, mh / h, 1.0)
@@ -253,14 +269,20 @@ class MotionApp:
             processed_bgr = cv2.resize(
                 processed_bgr, (nw, nh), interpolation=cv2.INTER_AREA
             )
+            detection_bgr = cv2.resize(
+                detection_bgr, (nw, nh), interpolation=cv2.INTER_AREA
+            )
         frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
         processed_rgb = cv2.cvtColor(processed_bgr, cv2.COLOR_BGR2RGB)
+        detection_rgb = cv2.cvtColor(detection_bgr, cv2.COLOR_BGR2RGB)
         self._photo_refs[:] = []
         img1 = ImageTk.PhotoImage(Image.fromarray(frame_rgb))
         img2 = ImageTk.PhotoImage(Image.fromarray(processed_rgb))
-        self._photo_refs.extend([img1, img2])
+        img3 = ImageTk.PhotoImage(Image.fromarray(detection_rgb))
+        self._photo_refs.extend([img1, img2, img3])
         self.input_label.configure(image=img1)
         self.output_label.configure(image=img2)
+        self.detection_label.configure(image=img3)
 
     def toggle_play(self):
         if self.cap is None:
@@ -283,19 +305,14 @@ class MotionApp:
                 self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             return
 
-        processed = self.processor.process_frame(frame)
+        processed, mag, ang = self.processor.process_frame(frame)
 
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        if self.processor.prev_gray is not None:
-            flow = cv2.calcOpticalFlowFarneback(
-                self.processor.prev_gray,
-                gray,
-                None,
-                0.5, 3, 15, 3, 5, 1.2, 0,
-            )
-            magnitude, _ = cv2.cartToPolar(flow[..., 0], flow[..., 1])
-            avg = np.mean(magnitude)
+        if mag is not None:
+            avg = np.mean(mag)
             self.motion_label.config(text=f"Motion: {avg:.4f}")
 
-        self._show_frames(frame, processed)
+        detections = self._detector.detect(frame)
+        detection_frame = draw_detections(frame, detections, mag, ang)
+
+        self._show_frames(frame, processed, detection_frame)
         self.root.after(30, self.update_frame)
